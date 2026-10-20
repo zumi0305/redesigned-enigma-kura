@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clastic Chat</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.6);
+        }
+        .highlight-text {
+            background-color: #fef08a;
+            color: #854d0e;
+            padding: 0 2px;
+            border-radius: 2px;
+            font-weight: 600;
+        }
+        .dark .highlight-text {
+            background-color: #854d0e;
+            color: #fef08a;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden antialiased">
+
+    <!-- CAPTCHA & Profile Setup Overlay -->
+    <div id="captchaModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-6">
+            <div class="text-center space-y-2">
+                <div class="inline-flex p-3 rounded-full bg-brand-500/10 text-brand-500 mb-1">
+                    <i class="fa-solid me-0 fa-comments text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white">Clastic Chat へようこそ</h2>
+                <p class="text-xs text-slate-400">参加するにはプロフィールの設定とセキュリティ認証が必要です。</p>
+            </div>
+
+            <!-- Profile Form -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">アバター設定</label>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative group">
+                            <img id="avatarPreview" src="https://api.dicebear.com/7.x/bottts/svg?seed=Clastic" alt="Avatar" class="w-16 h-16 rounded-full bg-slate-700 object-cover border-2 border-brand-500">
+                            <label for="avatarInput" class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition">
+                                <i class="fa-solid fa-camera text-white text-sm"></i>
+                            </label>
+                            <input type="file" id="avatarInput" accept="image/*" class="hidden">
+                        </div>
+                        <div class="text-xs text-slate-400">
+                            クリックして画像（Base64形式で保存）をアップロードできます。
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">ユーザー名</label>
+                    <input type="text" id="usernameInput" placeholder="名前を入力..." maxlength="20" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-brand-500 transition text-sm">
+                </div>
+
+                <!-- CAPTCHA Canvas Section -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">CAPTCHA 認証</label>
+                    <div class="flex items-center space-x-3 mb-2">
+                        <canvas id="captchaCanvas" width="160" height="45" class="rounded-lg border border-slate-700 bg-slate-900 cursor-pointer" title="クリックで再生成"></canvas>
+                        <button id="refreshCaptchaBtn" type="button" class="p-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition" title="文字を更新">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
+                    </div>
+                    <input type="text" id="captchaInput" placeholder="画像に表示されている文字を入力" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-brand-500 transition text-sm">
+                    <p id="captchaError" class="text-xs text-red-400 mt-1 hidden">CAPTCHAコードが正しくありません。</p>
+                </div>
+
+                <button id="joinBtn" class="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl transition duration-200 shadow-lg shadow-brand-600/30 flex items-center justify-center space-x-2">
+                    <span>チャットに参加</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Sidebar (Channels) -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col flex-shrink-0">
+            <!-- App Header -->
+            <div class="h-16 px-4 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-shapes text-brand-500 text-xl"></i>
+                    <span class="font-bold text-lg text-white tracking-wide">Clastic Chat</span>
+                </div>
+                <!-- Status Badge -->
+                <div class="flex items-center space-x-1.5 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Online</span>
+                </div>
+            </div>
+
+            <!-- Channels List -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-6">
+                <div>
+                    <h3 class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">チャンネル</h3>
+                    <nav id="channelList" class="space-y-1">
+                        <!-- Loaded dynamically -->
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Online Users Header / Trigger Modal -->
+            <div class="p-3 border-t border-slate-800">
+                <button id="openUsersModalBtn" class="w-full py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl flex items-center justify-between text-xs text-slate-300 transition">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-users text-brand-400"></i>
+                        <span>オンラインユーザー</span>
+                    </div>
+                    <span id="activeUsersCount" class="px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-bold">1</span>
+                </button>
+            </div>
+
+            <!-- Current User Bar -->
+            <div class="p-3 bg-slate-900/50 border-t border-slate-800 flex items-center space-x-3">
+                <img id="currentUserAvatar" src="" class="w-9 h-9 rounded-full bg-slate-700 object-cover border border-slate-600">
+                <div class="flex-1 min-w-0">
+                    <div id="currentUsername" class="text-sm font-semibold text-white truncate">ユーザー名</div>
+                    <div class="text-[10px] text-slate-400">オンライン</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col min-w-0 bg-slate-900">
+            
+            <!-- Chat Header -->
+            <header class="h-16 border-b border-slate-800 px-6 flex items-center justify-between flex-shrink-0 bg-slate-900/50 backdrop-blur">
+                <div class="flex items-center space-x-3 min-w-0">
+                    <i class="fa-solid fa-hashtag text-slate-400 text-xl"></i>
+                    <div>
+                        <h2 id="currentChannelName" class="font-bold text-white text-base leading-tight">general</h2>
+                        <p id="currentChannelDesc" class="text-xs text-slate-400 truncate">雑談や全体告知のためのチャンネル</p>
+                    </div>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="relative w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="メッセージを検索..." class="w-full pl-8 pr-8 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500 transition">
+                    <button id="clearSearchBtn" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 hidden text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Search Results Notification Banner -->
+            <div id="searchBanner" class="hidden bg-brand-950/40 border-b border-brand-500/20 px-6 py-2 flex items-center justify-between text-xs text-brand-200">
+                <span>検索結果を表示中: "<strong id="searchQueryText"></strong>"</span>
+                <button id="resetSearchBtn" class="underline hover:text-white">検索結果をクリア</button>
+            </div>
+
+            <!-- Messages Area -->
+            <div id="messageContainer" class="flex-1 overflow-y-auto p-6 space-y-4">
+                <!-- Messages render here -->
+            </div>
+
+            <!-- Attachment Preview Area -->
+            <div id="attachmentPreviewContainer" class="px-6 pt-2 hidden">
+                <div class="inline-relative bg-slate-800 border border-slate-700 rounded-xl p-2 flex items-center space-x-3 max-w-xs">
+                    <img id="attachmentImagePreview" class="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-700">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs text-slate-200 truncate">添付画像</p>
+                        <p class="text-[10px] text-slate-400">送信準備完了</p>
+                    </div>
+                    <button id="removeAttachmentBtn" class="p-1 text-slate-400 hover:text-red-400 transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Message Input Form -->
+            <div class="p-4 border-t border-slate-800 flex-shrink-0">
+                <form id="messageForm" class="flex items-end space-x-2 bg-slate-950 border border-slate-800 rounded-xl p-2 focus-within:border-brand-500 transition">
+                    
+                    <!-- File Upload Button -->
+                    <label for="imageAttachmentInput" class="p-2.5 text-slate-400 hover:text-brand-400 cursor-pointer rounded-lg hover:bg-slate-900 transition flex-shrink-0">
+                        <i class="fa-solid fa-paperclip text-lg"></i>
+                    </label>
+                    <input type="file" id="imageAttachmentInput" accept="image/*" class="hidden">
+
+                    <!-- Textarea -->
+                    <textarea id="messageInput" rows="1" placeholder="メッセージを入力... (#general)" class="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-32 py-2 px-1"></textarea>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="p-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg transition duration-200 flex-shrink-0 shadow-md shadow-brand-600/20">
+                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Active Users Modal -->
+    <div id="activeUsersModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+                <h3 class="font-bold text-white flex items-center space-x-2">
+                    <i class="fa-solid fa-users text-brand-400"></i>
+                    <span>オンライン中のユーザー</span>
+                </h3>
+                <button id="closeUsersModalBtn" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="activeUsersList" class="max-h-64 overflow-y-auto space-y-2 pr-1">
+                <!-- User items dynamically rendered -->
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript App Logic -->
+    <script>
+        // Application State
+        const APP_STATE = {
+            currentUser: {
+                id: null,
+                name: '',
+                avatar: ''
+            },
+            currentChannel: 'general',
+            captchaCode: '',
+            messages: [],
+            activeUsers: new Map(), // clientId -> userData
+            pendingAttachmentBase64: null,
+            searchQuery: '',
+            channels: [
+                { id: 'general', name: 'general', desc: '雑談や全体告知のためのメインチャンネル' },
+                { id: 'tech', name: '開発・技術', desc: 'プログラミングやコードに関する議論' },
+                { id: 'random', name: 'ランダム', desc: '自由なトピックで気軽に話せる場所' }
+            ]
+        };
+
+        // WebSocket Engine (Public PieSocket for demo multi-client testing)
+        let ws = null;
+        const WS_URL = 'wss://demo.piesocket.com/v3/channel_123?api_key=VCX2aC363jgEA1AKY316skd6FGCode2w3a210';
+
+        // --- DOM Elements ---
+        const captchaModal = document.getElementById('captchaModal');
+        const captchaCanvas = document.getElementById('captchaCanvas');
+        const refreshCaptchaBtn = document.getElementById('refreshCaptchaBtn');
+        const captchaInput = document.getElementById('captchaInput');
+        const usernameInput = document.getElementById('usernameInput');
+        const avatarInput = document.getElementById('avatarInput');
+        const avatarPreview = document.getElementById('avatarPreview');
+        const joinBtn = document.getElementById('joinBtn');
+        const captchaError = document.getElementById('captchaError');
+
+        const currentUserAvatar = document.getElementById('currentUserAvatar');
+        const currentUsername = document.getElementById('currentUsername');
+        const channelList = document.getElementById('channelList');
+        const currentChannelName = document.getElementById('currentChannelName');
+        const currentChannelDesc = document.getElementById('currentChannelDesc');
+        const messageContainer = document.getElementById('messageContainer');
+
+        const messageForm = document.getElementById('messageForm');
+        const messageInput = document.getElementById('messageInput');
+        const imageAttachmentInput = document.getElementById('imageAttachmentInput');
+        const attachmentPreviewContainer = document.getElementById('attachmentPreviewContainer');
+        const attachmentImagePreview = document.getElementById('attachmentImagePreview');
+        const removeAttachmentBtn = document.getElementById('removeAttachmentBtn');
+
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const searchBanner = document.getElementById('searchBanner');
+        const searchQueryText = document.getElementById('searchQueryText');
+        const resetSearchBtn = document.getElementById('resetSearchBtn');
+
+        const openUsersModalBtn = document.getElementById('openUsersModalBtn');
+        const activeUsersModal = document.getElementById('activeUsersModal');
+        const closeUsersModalBtn = document.getElementById('closeUsersModalBtn');
+        const activeUsersList = document.getElementById('activeUsersList');
+        const activeUsersCount = document.getElementById('activeUsersCount');
+
+        // Initial Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            initLocalStorage();
+            generateCaptcha();
+            renderChannels();
+            
+            // Auto fill preset username if available
+            if (APP_STATE.currentUser.name) {
+                usernameInput.value = APP_STATE.currentUser.name;
+            }
+            if (APP_STATE.currentUser.avatar) {
+                avatarPreview.src = APP_STATE.currentUser.avatar;
+            }
+        });
+
+        // Local Storage Handler
+        function initLocalStorage() {
+            const savedUser = localStorage.getItem('clastic_user');
+            if (savedUser) {
+                APP_STATE.currentUser = JSON.parse(savedUser);
+            } else {
+                APP_STATE.currentUser.id = 'user_' + Math.random().toString(36).substr(2, 9);
+                APP_STATE.currentUser.avatar = 'https://api.dicebear.com/7.x/bottts/svg?seed=' + APP_STATE.currentUser.id;
+            }
+
+            const savedMessages = localStorage.getItem('clastic_messages');
+            if (savedMessages) {
+                APP_STATE.messages = JSON.parse(savedMessages);
+            }
+        }
+
+        function saveMessagesToStorage() {
+            localStorage.setItem('clastic_messages', JSON.stringify(APP_STATE.messages));
+        }
+
+        // --- CAPTCHA Generator ---
+        function generateCaptcha() {
+            const ctx = captchaCanvas.getContext('2d');
+            ctx.clearRect(0, 0, captchaCanvas.width, captchaCanvas.height);
+            
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 5; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            APP_STATE.captchaCode = code;
+
+            // Background Noise Lines
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, captchaCanvas.width, captchaCanvas.height);
+
+            for (let i = 0; i < 5; i++) {
+                ctx.strokeStyle = '#334155';
+                ctx.beginPath();
+                ctx.moveTo(Math.random() * captchaCanvas.width, Math.random() * captchaCanvas.height);
+                ctx.lineTo(Math.random() * captchaCanvas.width, Math.random() * captchaCanvas.height);
+                ctx.stroke();
+            }
+
+            // Text Rendering with Noise
+            ctx.font = 'bold 22px Inter, sans-serif';
+            ctx.fillStyle = '#818cf8';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i < code.length; i++) {
+                const x = 30 + i * 25;
+                const y = 22 + (Math.random() * 8 - 4);
+                const angle = (Math.random() * 0.4) - 0.2;
+                
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle);
+                ctx.fillText(code[i], 0, 0);
+                ctx.restore();
+            }
+        }
+
+        refreshCaptchaBtn.addEventListener('click', generateCaptcha);
+        captchaCanvas.addEventListener('click', generateCaptcha);
+
+        // Avatar Upload Handlers (Convert image to Base64)
+        avatarInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 2 * 1024 * 1024) {
+                    alert('画像サイズは2MB以下にしてください。');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const base64 = event.target.result;
+                    APP_STATE.currentUser.avatar = base64;
+                    avatarPreview.src = base64;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // CAPTCHA & Profile Submission
+        joinBtn.addEventListener('click', () => {
+            const inputName = usernameInput.value.trim();
+            const inputCaptcha = captchaInput.value.trim().toUpperCase();
+
+            if (!inputName) {
+                alert('ユーザー名を入力してください。');
+                return;
+            }
+
+            if (inputCaptcha !== APP_STATE.captchaCode) {
+                captchaError.classList.remove('hidden');
+                generateCaptcha();
+                captchaInput.value = '';
+                return;
+            }
+
+            // Verified
+            captchaError.classList.add('hidden');
+            APP_STATE.currentUser.name = inputName;
+            
+            localStorage.setItem('clastic_user', JSON.stringify(APP_STATE.currentUser));
+
+            // Hide Modal
+            captchaModal.classList.add('hidden');
+
+            // Setup Profile Header
+            currentUsername.textContent = APP_STATE.currentUser.name;
+            currentUserAvatar.src = APP_STATE.currentUser.avatar;
+
+            // Connect Real-Time Sync
+            initWebSocket();
+            renderMessages();
+        });
+
+        // --- WebSocket Synchronization Engine ---
+        function initWebSocket() {
+            try {
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    // Send Presence Heartbeat
+                    sendPresence();
+                    setInterval(sendPresence, 15000); // 15 sec heartbeat
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const payload = JSON.parse(event.data);
+                        handleIncomingPayload(payload);
+                    } catch (err) {
+                        // Ignore non-JSON broadcast messages
+                    }
+                };
+
+                ws.onclose = () => {
+                    // Auto Reconnect retry
+                    setTimeout(initWebSocket, 3000);
+                };
+            } catch (err) {
+                console.warn('WebSocket connection fallback active.');
+            }
+        }
+
+        function broadcastPayload(payload) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+            }
+        }
+
+        function sendPresence() {
+            broadcastPayload({
+                type: 'PRESENCE',
+                user: APP_STATE.currentUser,
+                timestamp: Date.now()
+            });
+            // Register current user in active users list
+            APP_STATE.activeUsers.set(APP_STATE.currentUser.id, {
+                ...APP_STATE.currentUser,
+                lastSeen: Date.now()
+            });
+            updateActiveUsersUI();
+        }
+
+        function handleIncomingPayload(payload) {
+            if (payload.type === 'PRESENCE') {
+                if (payload.user && payload.user.id) {
+                    APP_STATE.activeUsers.set(payload.user.id, {
+                        ...payload.user,
+                        lastSeen: Date.now()
+                    });
+                    updateActiveUsersUI();
+                }
+            } else if (payload.type === 'NEW_MESSAGE') {
+                // Avoid duplicating locally sent messages
+                if (!APP_STATE.messages.some(m => m.id === payload.message.id)) {
+                    APP_STATE.messages.push(payload.message);
+                    saveMessagesToStorage();
+                    if (payload.message.channelId === APP_STATE.currentChannel) {
+                        renderMessages();
+                    }
+                }
+            } else if (payload.type === 'ADD_REACTION') {
+                const msg = APP_STATE.messages.find(m => m.id === payload.messageId);
+                if (msg) {
+                    if (!msg.reactions) msg.reactions = {};
+                    if (!msg.reactions[payload.emoji]) msg.reactions[payload.emoji] = [];
+                    if (!msg.reactions[payload.emoji].includes(payload.userId)) {
+                        msg.reactions[payload.emoji].push(payload.userId);
+                        saveMessagesToStorage();
+                        renderMessages();
+                    }
+                }
+            }
+        }
+
+        // Clean up stale users (>30 seconds inactive)
+        setInterval(() => {
+            const now = Date.now();
+            let changed = false;
+            APP_STATE.activeUsers.forEach((user, id) => {
+                if (id !== APP_STATE.currentUser.id && now - user.lastSeen > 30000) {
+                    APP_STATE.activeUsers.delete(id);
+                    changed = true;
+                }
+            });
+            if (changed) updateActiveUsersUI();
+        }, 10000);
+
+        function updateActiveUsersUI() {
+            activeUsersCount.textContent = APP_STATE.activeUsers.size;
+            
+            activeUsersList.innerHTML = '';
+            APP_STATE.activeUsers.forEach(user => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center space-x-3 p-2 rounded-xl bg-slate-900 border border-slate-800';
+                item.innerHTML = `
+                    <img src="${user.avatar}" class="w-8 h-8 rounded-full object-cover bg-slate-700">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-white truncate">${escapeHTML(user.name)}</p>
+                        <p class="text-[10px] text-emerald-400">アクティブ</p>
+                    </div>
+                `;
+                activeUsersList.appendChild(item);
+            });
+        }
+
+        // --- Channel Management ---
+        function renderChannels() {
+            channelList.innerHTML = '';
+            APP_STATE.channels.forEach(ch => {
+                const btn = document.createElement('button');
+                const isActive = ch.id === APP_STATE.currentChannel;
+                btn.className = `w-full px-3 py-2 rounded-xl flex items-center space-x-2.5 text-xs font-medium transition ${
+                    isActive ? 'bg-brand-600/20 text-brand-300 font-semibold' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                }`;
+                btn.innerHTML = `
+                    <i class="fa-solid fa-hashtag ${isActive ? 'text-brand-400' : 'text-slate-500'} text-sm"></i>
+                    <span class="truncate">${escapeHTML(ch.name)}</span>
+                `;
+                btn.addEventListener('click', () => switchChannel(ch.id));
+                channelList.appendChild(btn);
+            });
+        }
+
+        function switchChannel(channelId) {
+            APP_STATE.currentChannel = channelId;
+            const channel = APP_STATE.channels.find(c => c.id === channelId);
+            currentChannelName.textContent = channel.name;
+            currentChannelDesc.textContent = channel.desc;
+            messageInput.placeholder = `メッセージを入力... (#${channel.name})`;
+            renderChannels();
+            renderMessages();
+        }
+
+        // --- Image Attachment handling ---
+        imageAttachmentInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 3 * 1024 * 1024) {
+                    alert('添付画像のサイズは3MB以下にしてください。');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    APP_STATE.pendingAttachmentBase64 = event.target.result;
+                    attachmentImagePreview.src = event.target.result;
+                    attachmentPreviewContainer.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        removeAttachmentBtn.addEventListener('click', () => {
+            APP_STATE.pendingAttachmentBase64 = null;
+            imageAttachmentInput.value = '';
+            attachmentPreviewContainer.classList.add('hidden');
+        });
+
+        // --- Send Message ---
+        messageForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+            const attachment = APP_STATE.pendingAttachmentBase64;
+
+            if (!text && !attachment) return;
+
+            const newMessage = {
+                id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                channelId: APP_STATE.currentChannel,
+                sender: APP_STATE.currentUser,
+                content: text,
+                attachment: attachment,
+                reactions: {}, // { '👍': ['user_id_1'] }
+                timestamp: Date.now()
+            };
+
+            // Local save & render
+            APP_STATE.messages.push(newMessage);
+            saveMessagesToStorage();
+            renderMessages();
+
+            // Broadcast via WebSocket
+            broadcastPayload({
+                type: 'NEW_MESSAGE',
+                message: newMessage
+            });
+
+            // Reset inputs
+            messageInput.value = '';
+            APP_STATE.pendingAttachmentBase64 = null;
+            imageAttachmentInput.value = '';
+            attachmentPreviewContainer.classList.add('hidden');
+            
+            // Auto scroll
+            scrollToBottom();
+        });
+
+        // Textarea Shift+Enter handling
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                messageForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        // --- Search functionality ---
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            APP_STATE.searchQuery = query;
+
+            if (query) {
+                clearSearchBtn.classList.remove('hidden');
+                searchBanner.classList.remove('hidden');
+                searchQueryText.textContent = query;
+            } else {
+                clearSearchBtn.classList.add('hidden');
+                searchBanner.classList.add('hidden');
+            }
+            renderMessages();
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            APP_STATE.searchQuery = '';
+            clearSearchBtn.classList.add('hidden');
+            searchBanner.classList.add('hidden');
+            renderMessages();
+        });
+
+        resetSearchBtn.addEventListener('click', () => {
+            clearSearchBtn.click();
+        });
+
+        // Highlight matched keyword helper
+        function highlightContent(text, query) {
+            const safeText = escapeHTML(text);
+            if (!query) return safeText;
+
+            const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+            return safeText.replace(regex, '<mark class="highlight-text">$1</mark>');
+        }
+
+        // --- Render Messages ---
+        function renderMessages() {
+            messageContainer.innerHTML = '';
+
+            let filtered = APP_STATE.messages.filter(m => m.channelId === APP_STATE.currentChannel);
+
+            // Filter by search query if active
+            if (APP_STATE.searchQuery) {
+                const q = APP_STATE.searchQuery.toLowerCase();
+                filtered = filtered.filter(m => m.content.toLowerCase().includes(q));
+            }
+
+            if (filtered.length === 0) {
+                messageContainer.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
+                        <i class="fa-regular fa-comments text-4xl"></i>
+                        <p class="text-sm">メッセージはありません</p>
+                    </div>
+                `;
+                return;
+            }
+
+            filtered.forEach(msg => {
+                const isMe = msg.sender.id === APP_STATE.currentUser.id;
+                const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                const msgElement = document.createElement('div');
+                msgElement.className = 'group flex items-start space-x-3 hover:bg-slate-950/30 p-2 rounded-xl transition';
+
+                const reactionsHTML = renderReactionsHTML(msg);
+
+                msgElement.innerHTML = `
+                    <img src="${msg.sender.avatar}" class="w-10 h-10 rounded-full object-cover bg-slate-700 flex-shrink-0 mt-0.5 border border-slate-700">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-semibold text-sm text-white truncate">${escapeHTML(msg.sender.name)}</span>
+                            <span class="text-[10px] text-slate-500">${timeStr}</span>
+                        </div>
+                        ${msg.content ? `<div class="mt-1 text-sm text-slate-200 leading-relaxed break-words">${highlightContent(msg.content, APP_STATE.searchQuery)}</div>` : ''}
+                        ${msg.attachment ? `
+                            <div class="mt-2">
+                                <img src="${msg.attachment}" class="max-w-xs max-h-60 rounded-xl border border-slate-700 object-cover cursor-pointer" onclick="window.open('${msg.attachment}')">
+                            </div>
+                        ` : ''}
+
+                        <!-- Reaction Container -->
+                        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                            ${reactionsHTML}
+                            <!-- Reaction Picker Button -->
+                            <div class="relative group/picker inline-block">
+                                <button class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs transition">
+                                    <i class="fa-regular fa-face-smile"></i> +
+                                </button>
+                                <!-- Emoji Picker Popover -->
+                                <div class="hidden group-hover/picker:flex absolute bottom-full left-0 mb-1 bg-slate-800 border border-slate-700 shadow-xl rounded-xl p-1.5 space-x-1 z-10">
+                                    <button class="emoji-btn hover:bg-slate-700 p-1 rounded transition text-base" data-emoji="👍">👍</button>
+                                    <button class="emoji-btn hover:bg-slate-700 p-1 rounded transition text-base" data-emoji="❤️">❤️</button>
+                                    <button class="emoji-btn hover:bg-slate-700 p-1 rounded transition text-base" data-emoji="🔥">🔥</button>
+                                    <button class="emoji-btn hover:bg-slate-700 p-1 rounded transition text-base" data-emoji="😂">😂</button>
+                                    <button class="emoji-btn hover:bg-slate-700 p-1 rounded transition text-base" data-emoji="🎉">🎉</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Add Reaction Button Listeners
+                msgElement.querySelectorAll('.emoji-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const emoji = btn.getAttribute('data-emoji');
+                        addReaction(msg.id, emoji);
+                    });
+                });
+
+                messageContainer.appendChild(msgElement);
+            });
+
+            scrollToBottom();
+        }
+
+        function renderReactionsHTML(msg) {
+            if (!msg.reactions) return '';
+            let html = '';
+            for (const [emoji, users] of Object.entries(msg.reactions)) {
+                if (users.length > 0) {
+                    const hasUserReacted = users.includes(APP_STATE.currentUser.id);
+                    html += `
+                        <button onclick="addReaction('${msg.id}', '${emoji}')" class="px-2 py-0.5 rounded-lg text-xs flex items-center space-x-1 border transition ${
+                            hasUserReacted 
+                                ? 'bg-brand-500/20 border-brand-500/40 text-brand-300' 
+                                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        }">
+                            <span>${emoji}</span>
+                            <span class="font-bold">${users.length}</span>
+                        </button>
+                    `;
+                }
+            }
+            return html;
+        }
+
+        function addReaction(messageId, emoji) {
+            const msg = APP_STATE.messages.find(m => m.id === messageId);
+            if (!msg) return;
+
+            if (!msg.reactions) msg.reactions = {};
+            if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
+
+            const userIndex = msg.reactions[emoji].indexOf(APP_STATE.currentUser.id);
+            if (userIndex > -1) {
+                // Remove reaction
+                msg.reactions[emoji].splice(userIndex, 1);
+            } else {
+                // Add reaction
+                msg.reactions[emoji].push(APP_STATE.currentUser.id);
+            }
+
+            saveMessagesToStorage();
+            renderMessages();
+
+            // Broadcast reaction update
+            broadcastPayload({
+                type: 'ADD_REACTION',
+                messageId: messageId,
+                emoji: emoji,
+                userId: APP_STATE.currentUser.id
+            });
+        }
+
+        // Active Users Modal Controls
+        openUsersModalBtn.addEventListener('click', () => {
+            activeUsersModal.classList.remove('hidden');
+        });
+        closeUsersModalBtn.addEventListener('click', () => {
+            activeUsersModal.classList.add('hidden');
+        });
+
+        // Helper Utilities
+        function scrollToBottom() {
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+    </script>
+</body>
+</html>
