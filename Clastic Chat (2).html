@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clastic Chat - Secure Realtime Workspace</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        },
+                        darkbg: '#0f172a',
+                        darkpanel: '#1e293b',
+                        darkborder: '#334155'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-100 font-sans h-full flex flex-col overflow-hidden antialiased select-none">
+
+    <!-- App Container -->
+    <div class="flex h-full w-full overflow-hidden relative">
+
+        <!-- Sidebar (Desktop) -->
+        <aside class="w-64 bg-darkpanel border-r border-darkborder flex flex-col shrink-0 hidden md:flex z-20">
+            <!-- App Header / Logo -->
+            <div class="p-4 border-b border-darkborder flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="bg-brand-600 text-white p-2 rounded-xl shadow-lg shadow-brand-500/30">
+                        <i data-lucide="shield-check" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight tracking-wide text-white">Clastic Chat</h1>
+                        <p class="text-xs text-slate-400">Secure Realtime v2.6</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channels Section -->
+            <div class="p-3 flex-1 overflow-y-auto space-y-6">
+                <div>
+                    <h2 class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">チャンネル</h2>
+                    <nav class="space-y-1" id="channelList">
+                        <!-- Channels rendered dynamically -->
+                    </nav>
+                </div>
+
+                <!-- Online Users Summary Card -->
+                <div class="bg-slate-900/50 rounded-xl p-3 border border-darkborder/50">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-slate-300">アクティブユーザー</span>
+                        <span id="sidebarOnlineBadge" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
+                            1人
+                        </span>
+                    </div>
+                    <button id="btnViewOnlineUsers" class="w-full text-left text-xs text-brand-500 hover:text-brand-400 font-medium flex items-center justify-between pt-1 border-t border-darkborder/40">
+                        <span>参加者一覧を表示</span>
+                        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- User Profile Card in Sidebar -->
+            <div class="p-3 border-t border-darkborder bg-slate-900/40">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3 overflow-hidden cursor-pointer" id="btnOpenProfile">
+                        <div class="relative">
+                            <img id="sidebarUserAvatar" src="" class="w-10 h-10 rounded-full object-cover border-2 border-brand-500 bg-slate-800" alt="Avatar">
+                            <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-darkpanel rounded-full"></span>
+                        </div>
+                        <div class="truncate">
+                            <div id="sidebarUserName" class="text-sm font-semibold truncate text-slate-200">ユーザー</div>
+                            <div class="text-xs text-slate-400 flex items-center space-x-1">
+                                <i data-lucide="settings" class="w-3 h-3"></i>
+                                <span>プロフィール設定</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 flex flex-col min-w-0 bg-darkbg relative">
+            
+            <!-- Header Bar -->
+            <header class="h-16 border-b border-darkborder bg-darkpanel/80 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-10">
+                <div class="flex items-center space-x-3 min-w-0">
+                    <button id="btnMobileSidebar" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <span id="currentChannelIcon" class="text-brand-500"><i data-lucide="hash" class="w-5 h-5"></i></span>
+                        <h2 id="currentChannelTitle" class="text-base font-bold text-white truncate">★メイン</h2>
+                    </div>
+                    <span id="headerOnlineBadge" class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
+                        🟢 オンライン: 1人
+                    </span>
+                </div>
+
+                <!-- Search & Actions -->
+                <div class="flex items-center space-x-2">
+                    <div id="captchaVerifiedBadge" class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5 mr-1"></i>
+                        認証済み
+                    </div>
+                    <div class="relative w-32 sm:w-60">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="searchInput" placeholder="検索..." class="w-full bg-slate-900 border border-darkborder rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors select-text">
+                        <button id="btnClearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                    <button id="btnTriggerCaptcha" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-darkborder transition-all hidden sm:block" title="CAPTCHA再認証">
+                        <i data-lucide="shield" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Search Status Notice -->
+            <div id="searchNotice" class="hidden bg-brand-900/40 border-b border-brand-500/30 px-4 py-2 flex items-center justify-between text-xs text-brand-200">
+                <span id="searchNoticeText">検索フィルタ適用中</span>
+                <button id="btnResetSearch" class="underline hover:text-white">検索結果を解除</button>
+            </div>
+
+            <!-- Chat Messages Display Area -->
+            <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 select-text">
+                <!-- Messages will be injected dynamically -->
+            </div>
+
+            <!-- Image Preview Bar before send -->
+            <div id="imagePreviewBar" class="hidden px-4 py-2 bg-slate-900 border-t border-darkborder flex items-center space-x-3">
+                <div class="relative group">
+                    <img id="imagePreviewThumb" src="" class="w-12 h-12 rounded-lg object-cover border border-darkborder" alt="Preview">
+                    <button id="btnRemoveImage" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow-md">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </div>
+                <span class="text-xs text-slate-400">画像が添付されました</span>
+            </div>
+
+            <!-- Message Input Form Bar -->
+            <div class="p-3 sm:p-4 border-t border-darkborder bg-darkpanel/50 shrink-0 pb-safe">
+                <form id="chatForm" class="flex items-center space-x-2">
+                    <label class="cursor-pointer p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-darkborder transition-colors shrink-0">
+                        <i data-lucide="paperclip" class="w-5 h-5"></i>
+                        <input type="file" id="imageInput" accept="image/*" class="hidden">
+                    </label>
+
+                    <div class="relative flex-1">
+                        <input type="text" id="messageInput" placeholder="メッセージを入力... (アカウント登録後は認証不要)" class="w-full bg-slate-900 border border-darkborder rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors select-text">
+                        <!-- Cooldown Badge -->
+                        <div id="cooldownBadge" class="hidden absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-xs font-mono">
+                            Wait <span id="cooldownTimer">3</span>s
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btnSend" class="px-4 sm:px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white font-medium rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center space-x-1.5 shrink-0">
+                        <span>送信</span>
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Mobile Drawer (Sidebar for smartphones) -->
+    <div id="mobileDrawer" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden md:hidden">
+        <div class="w-72 bg-darkpanel h-full flex flex-col border-r border-darkborder justify-between">
+            <div>
+                <div class="p-4 border-b border-darkborder flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="shield-check" class="w-6 h-6 text-brand-500"></i>
+                        <span class="font-bold text-white">Clastic Chat</span>
+                    </div>
+                    <button id="btnCloseMobileDrawer" class="p-1 rounded-lg text-slate-400 hover:text-white">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-3 space-y-4">
+                    <div>
+                        <h2 class="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">チャンネル</h2>
+                        <nav class="space-y-1" id="mobileChannelList">
+                            <!-- Dynamic Channels -->
+                        </nav>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mobile User Profile & Online Info -->
+            <div class="p-3 border-t border-darkborder bg-slate-900/60 space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400">オンライン: <span id="mobileOnlineCount" class="text-emerald-400 font-bold">1人</span></span>
+                    <button id="btnViewOnlineUsersMobile" class="text-xs text-brand-500 font-medium">メンバー一覧</button>
+                </div>
+                <div class="flex items-center space-x-3 cursor-pointer" id="btnOpenProfileMobile">
+                    <img id="mobileUserAvatar" src="" class="w-9 h-9 rounded-full object-cover border border-brand-500 bg-slate-800" alt="Avatar">
+                    <div class="truncate">
+                        <div id="mobileUserName" class="text-sm font-semibold truncate text-slate-200">ユーザー</div>
+                        <div class="text-[11px] text-slate-400">プロフィール設定を変更</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CAPTCHA SECURITY MODAL -->
+    <div id="captchaModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-darkpanel border border-darkborder rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <button id="btnCloseCaptcha" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1 rounded-lg">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
+                    <i data-lucide="shield-alert" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-lg text-white">初回セキュリティ認証 (CAPTCHA)</h3>
+                    <p class="text-xs text-slate-400">アカウント未登録状態での初回メッセージ送信用です</p>
+                </div>
+            </div>
+
+            <!-- Canvas Display for CAPTCHA Image -->
+            <div class="bg-slate-950 rounded-xl p-3 border border-darkborder mb-4 flex flex-col items-center justify-center space-y-2">
+                <div class="relative flex items-center justify-center w-full">
+                    <canvas id="captchaCanvas" width="220" height="70" class="rounded-lg border border-slate-800 bg-slate-900 shadow-inner cursor-pointer" title="クリックして再読み込み"></canvas>
+                    <button id="btnRefreshCaptcha" type="button" class="ml-3 p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-darkborder transition-colors" title="認証コードを再生成">
+                        <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <p class="text-[11px] text-slate-500">※ 文字が読みづらい場合は右のボタンで更新できます</p>
+            </div>
+
+            <!-- CAPTCHA Input Form -->
+            <form id="captchaForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">表示文字を入力 (大文字・小文字不問)</label>
+                    <input type="text" id="captchaInput" autocomplete="off" maxlength="6" placeholder="例: A8K2" class="w-full bg-slate-900 border border-darkborder rounded-xl px-4 py-2.5 text-center text-lg tracking-widest font-mono text-white placeholder-slate-600 focus:outline-none focus:border-brand-500 uppercase">
+                    <p id="captchaError" class="text-xs text-red-400 mt-1 hidden flex items-center space-x-1">
+                        <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
+                        <span>認証コードが一致しません。もう一度お試しください。</span>
+                    </p>
+                </div>
+
+                <div class="flex items-center space-x-3 pt-2">
+                    <button type="button" id="btnCancelCaptcha" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl border border-darkborder transition-colors text-sm">
+                        キャンセル
+                    </button>
+                    <button type="submit" class="flex-1 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl shadow-lg shadow-brand-500/20 transition-all text-sm flex items-center justify-center space-x-1">
+                        <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                        <span>認証して送信</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Profile Edit Modal -->
+    <div id="profileModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-darkpanel border border-darkborder rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
+            <button id="btnCloseProfile" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1 rounded-lg">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="font-bold text-lg text-white mb-4 flex items-center space-x-2">
+                <i data-lucide="user-cog" class="w-5 h-5 text-brand-500"></i>
+                <span>プロフィール設定</span>
+            </h3>
+
+            <form id="profileForm" class="space-y-4">
+                <div class="flex flex-col items-center space-y-3">
+                    <div class="relative group">
+                        <img id="profileAvatarPreview" src="" class="w-20 h-20 rounded-full object-cover border-2 border-brand-500 bg-slate-800" alt="Profile">
+                        <label class="absolute inset-0 bg-slate-950/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                            <i data-lucide="camera" class="w-6 h-6"></i>
+                            <input type="file" id="avatarInput" accept="image/*" class="hidden">
+                        </label>
+                    </div>
+                    <p class="text-xs text-slate-400">画像をクリックしてアバター変更</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">表示名 (アカウント名義)</label>
+                    <input type="text" id="profileNameInput" maxlength="20" required class="w-full bg-slate-900 border border-darkborder rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                    <p class="text-[11px] text-slate-400 mt-1">※名前を登録すると、CAPTCHA認証が永続的に免除されます。</p>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl shadow-lg shadow-brand-500/20 transition-all text-sm">
+                        保存する
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Active Users List Modal -->
+    <div id="usersModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-darkpanel border border-darkborder rounded-2xl w-full max-w-md p-6 shadow-2xl relative flex flex-col max-h-[80vh]">
+            <button id="btnCloseUsersModal" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1 rounded-lg">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="font-bold text-lg text-white mb-1 flex items-center space-x-2">
+                <i data-lucide="users" class="w-5 h-5 text-emerald-400"></i>
+                <span>オンラインメンバー一覧</span>
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">現在リアルタイムでアクセスしているユーザーです</p>
+
+            <div id="onlineUsersList" class="flex-1 overflow-y-auto space-y-2 pr-1">
+                <!-- User list items -->
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        const CHANNELS = [
+            { id: 'main', name: '★メイン', icon: 'hash' },
+            { id: 'casual', name: '雑談', icon: 'message-square' },
+            { id: 'gaming', name: 'ゲーム', icon: 'gamepad-2' },
+            { id: 'news', name: 'ニュース', icon: 'newspaper' }
+        ];
+
+        let state = {
+            currentChannel: 'main',
+            user: {
+                id: 'usr_' + Math.random().toString(36).substr(2, 9),
+                name: 'ゲスト_' + Math.floor(1000 + Math.random() * 9000),
+                avatar: ''
+            },
+            messages: {},
+            activeUsers: new Map(),
+            pendingMessage: null,
+            isCaptchaVerified: false,
+            captchaCode: '',
+            cooldownSeconds: 0,
+            searchQuery: ''
+        };
+
+        const elements = {
+            channelList: document.getElementById('channelList'),
+            mobileChannelList: document.getElementById('mobileChannelList'),
+            messageContainer: document.getElementById('messageContainer'),
+            chatForm: document.getElementById('chatForm'),
+            messageInput: document.getElementById('messageInput'),
+            imageInput: document.getElementById('imageInput'),
+            imagePreviewBar: document.getElementById('imagePreviewBar'),
+            imagePreviewThumb: document.getElementById('imagePreviewThumb'),
+            btnRemoveImage: document.getElementById('btnRemoveImage'),
+            btnSend: document.getElementById('btnSend'),
+            cooldownBadge: document.getElementById('cooldownBadge'),
+            cooldownTimer: document.getElementById('cooldownTimer'),
+            currentChannelTitle: document.getElementById('currentChannelTitle'),
+            currentChannelIcon: document.getElementById('currentChannelIcon'),
+            headerOnlineBadge: document.getElementById('headerOnlineBadge'),
+            sidebarOnlineBadge: document.getElementById('sidebarOnlineBadge'),
+            mobileOnlineCount: document.getElementById('mobileOnlineCount'),
+            captchaVerifiedBadge: document.getElementById('captchaVerifiedBadge'),
+            searchInput: document.getElementById('searchInput'),
+            btnClearSearch: document.getElementById('btnClearSearch'),
+            searchNotice: document.getElementById('searchNotice'),
+            searchNoticeText: document.getElementById('searchNoticeText'),
+            btnResetSearch: document.getElementById('btnResetSearch'),
+            btnTriggerCaptcha: document.getElementById('btnTriggerCaptcha'),
+            
+            captchaModal: document.getElementById('captchaModal'),
+            btnCloseCaptcha: document.getElementById('btnCloseCaptcha'),
+            btnCancelCaptcha: document.getElementById('btnCancelCaptcha'),
+            captchaCanvas: document.getElementById('captchaCanvas'),
+            btnRefreshCaptcha: document.getElementById('btnRefreshCaptcha'),
+            captchaForm: document.getElementById('captchaForm'),
+            captchaInput: document.getElementById('captchaInput'),
+            captchaError: document.getElementById('captchaError'),
+
+            profileModal: document.getElementById('profileModal'),
+            btnCloseProfile: document.getElementById('btnCloseProfile'),
+            btnOpenProfile: document.getElementById('btnOpenProfile'),
+            btnOpenProfileMobile: document.getElementById('btnOpenProfileMobile'),
+            profileForm: document.getElementById('profileForm'),
+            profileNameInput: document.getElementById('profileNameInput'),
+            avatarInput: document.getElementById('avatarInput'),
+            profileAvatarPreview: document.getElementById('profileAvatarPreview'),
+            sidebarUserAvatar: document.getElementById('sidebarUserAvatar'),
+            sidebarUserName: document.getElementById('sidebarUserName'),
+            mobileUserAvatar: document.getElementById('mobileUserAvatar'),
+            mobileUserName: document.getElementById('mobileUserName'),
+
+            usersModal: document.getElementById('usersModal'),
+            btnCloseUsersModal: document.getElementById('btnCloseUsersModal'),
+            btnViewOnlineUsers: document.getElementById('btnViewOnlineUsers'),
+            btnViewOnlineUsersMobile: document.getElementById('btnViewOnlineUsersMobile'),
+            onlineUsersList: document.getElementById('onlineUsersList'),
+
+            btnMobileSidebar: document.getElementById('btnMobileSidebar'),
+            mobileDrawer: document.getElementById('mobileDrawer'),
+            btnCloseMobileDrawer: document.getElementById('btnCloseMobileDrawer')
+        };
+
+        let bc = null;
+        let ws = null;
+        let attachedImageBase64 = null;
+
+        function initSync() {
+            if (window.BroadcastChannel) {
+                bc = new BroadcastChannel('clastic_chat_v3_channel');
+                bc.onmessage = (event) => handleIncomingData(event.data);
+            }
+
+            try {
+                ws = new WebSocket('wss://socketsbay.com/wss/v2/2/demo/');
+                ws.onopen = () => {
+                    broadcastPresence();
+                    requestSync();
+                };
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data && data.type) handleIncomingData(data);
+                    } catch(e) {}
+                };
+            } catch(e) {}
+
+            setInterval(() => {
+                broadcastPresence();
+            }, 4000);
+        }
+
+        function sendPayload(payload) {
+            if (bc) bc.postMessage(payload);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+            }
+        }
+
+        function broadcastPresence() {
+            sendPayload({
+                type: 'PRESENCE_PING',
+                user: state.user,
+                timestamp: Date.now()
+            });
+        }
+
+        function requestSync() {
+            sendPayload({
+                type: 'REQUEST_HISTORY',
+                senderId: state.user.id
+            });
+        }
+
+        function handleIncomingData(data) {
+            if (!data) return;
+
+            if (data.type === 'PRESENCE_PING') {
+                if (data.user && data.user.id) {
+                    state.activeUsers.set(data.user.id, { ...data.user, lastSeen: Date.now() });
+                    cleanupInactiveUsers();
+                    updateOnlineCountUI();
+                }
+            } else if (data.type === 'CHAT_MESSAGE') {
+                if (data.message) {
+                    const ch = data.message.channel || 'main';
+                    if (!state.messages[ch]) state.messages[ch] = [];
+                    if (!state.messages[ch].some(m => m.id === data.message.id)) {
+                        state.messages[ch].push(data.message);
+                        saveMessagesToStorage(ch);
+                        if (ch === state.currentChannel) renderMessages();
+                    }
+                }
+            } else if (data.type === 'REACTION_UPDATE') {
+                const ch = data.channel || 'main';
+                if (state.messages[ch]) {
+                    const msg = state.messages[ch].find(m => m.id === data.messageId);
+                    if (msg) {
+                        msg.reactions = data.reactions;
+                        saveMessagesToStorage(ch);
+                        if (ch === state.currentChannel) renderMessages();
+                    }
+                }
+            } else if (data.type === 'REQUEST_HISTORY') {
+                sendPayload({
+                    type: 'SYNC_HISTORY_RESPONSE',
+                    messages: state.messages
+                });
+            } else if (data.type === 'SYNC_HISTORY_RESPONSE') {
+                if (data.messages) {
+                    let updated = false;
+                    for (const [ch, msgs] of Object.entries(data.messages)) {
+                        if (!state.messages[ch]) state.messages[ch] = [];
+                        msgs.forEach(m => {
+                            if (!state.messages[ch].some(existing => existing.id === m.id)) {
+                                state.messages[ch].push(m);
+                                updated = true;
+                            }
+                        });
+                        saveMessagesToStorage(ch);
+                    }
+                    if (updated && state.currentChannel) renderMessages();
+                }
+            }
+        }
+
+        function cleanupInactiveUsers() {
+            const now = Date.now();
+            for (let [id, user] of state.activeUsers.entries()) {
+                if (now - user.lastSeen > 15000) state.activeUsers.delete(id);
+            }
+            state.activeUsers.set(state.user.id, { ...state.user, lastSeen: Date.now() });
+        }
+
+        function updateOnlineCountUI() {
+            cleanupInactiveUsers();
+            const count = Math.max(1, state.activeUsers.size);
+            elements.headerOnlineBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>🟢 オンライン: ${count}人`;
+            elements.sidebarOnlineBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>${count}人`;
+            elements.mobileOnlineCount.textContent = `${count}人`;
+        }
+
+        function loadStorage() {
+            const savedUser = localStorage.getItem('clastic_user');
+            if (savedUser) {
+                try { state.user = JSON.parse(savedUser); } catch(e) {}
+            } else {
+                generateDefaultAvatar();
+            }
+
+            const captchaVerified = localStorage.getItem('clastic_captcha_verified');
+            if (captchaVerified === 'true' || !state.user.name.startsWith('ゲスト_')) {
+                state.isCaptchaVerified = true;
+                localStorage.setItem('clastic_captcha_verified', 'true');
+                updateCaptchaBadgeUI();
+            }
+
+            CHANNELS.forEach(ch => {
+                const savedMsgs = localStorage.getItem('clastic_messages_' + ch.id);
+                if (savedMsgs) {
+                    try { state.messages[ch.id] = JSON.parse(savedMsgs); } catch(e) { state.messages[ch.id] = []; }
+                } else {
+                    if (ch.id === 'main') {
+                        state.messages[ch.id] = [
+                            {
+                                id: 'msg_welcome',
+                                channel: 'main',
+                                userId: 'system',
+                                userName: '管理者 (System)',
+                                userAvatar: '',
+                                text: 'Clastic Chatへようこそ！プロフィール設定（名前登録）を完了すると、CAPTCHA認証が免除され快適にメッセージをやり取りできます。過去の履歴もここに永続保存されます。',
+                                image: null,
+                                timestamp: Date.now() - 60000,
+                                reactions: { '👍': 3, '❤️': 2 }
+                            }
+                        ];
+                    } else {
+                        state.messages[ch.id] = [];
+                    }
+                }
+            });
+        }
+
+        function saveMessagesToStorage(channelId) {
+            if (state.messages[channelId]) {
+                localStorage.setItem('clastic_messages_' + channelId, JSON.stringify(state.messages[channelId]));
+            }
+        }
+
+        function saveUserToStorage() {
+            localStorage.setItem('clastic_user', JSON.stringify(state.user));
+            broadcastPresence();
+        }
+
+        function updateCaptchaBadgeUI() {
+            if (state.isCaptchaVerified) {
+                elements.captchaVerifiedBadge.classList.remove('hidden');
+            } else {
+                elements.captchaVerifiedBadge.classList.add('hidden');
+            }
+        }
+
+        function generateDefaultAvatar() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 100;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#6366f1';
+            ctx.fillRect(0, 0, 100, 100);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(state.user.name.charAt(0).toUpperCase(), 50, 50);
+            state.user.avatar = canvas.toDataURL();
+            saveUserToStorage();
+        }
+
+        function generateCaptchaCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            state.captchaCode = code;
+            drawCaptchaCanvas();
+        }
+
+        function drawCaptchaCanvas() {
+            const canvas = elements.captchaCanvas;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < 6; i++) {
+                ctx.strokeStyle = `rgba(${Math.random()*150+100}, ${Math.random()*150+100}, ${Math.random()*150+100}, 0.5)`;
+                ctx.lineWidth = Math.random() * 2 + 1;
+                ctx.beginPath();
+                ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+                ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+                ctx.stroke();
+            }
+
+            ctx.font = 'bold 32px monospace';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i < state.captchaCode.length; i++) {
+                ctx.save();
+                const x = 25 + i * 36;
+                const y = 35 + (Math.random() * 16 - 8);
+                ctx.translate(x, y);
+                ctx.rotate((Math.random() - 0.5) * 0.6);
+                ctx.fillStyle = ['#6366f1', '#38bdf8', '#fbbf24', '#f43f5e', '#34d399'][Math.floor(Math.random()*5)];
+                ctx.fillText(state.captchaCode[i], 0, 0);
+                ctx.restore();
+            }
+        }
+
+        function openCaptchaModal(messagePayload) {
+            state.pendingMessage = messagePayload;
+            elements.captchaInput.value = '';
+            elements.captchaError.classList.add('hidden');
+            elements.captchaModal.classList.remove('hidden');
+            generateCaptchaCode();
+            elements.captchaInput.focus();
+        }
+
+        function closeCaptchaModal() {
+            elements.captchaModal.classList.add('hidden');
+            state.pendingMessage = null;
+        }
+
+        function sendMessageDirectly(messagePayload) {
+            const ch = messagePayload.channel;
+            if (!state.messages[ch]) state.messages[ch] = [];
+            state.messages[ch].push(messagePayload);
+            saveMessagesToStorage(ch);
+            renderMessages();
+
+            sendPayload({
+                type: 'CHAT_MESSAGE',
+                message: messagePayload
+            });
+
+            elements.messageInput.value = '';
+            attachedImageBase64 = null;
+            elements.imagePreviewBar.classList.add('hidden');
+            elements.imageInput.value = '';
+
+            startCooldown(3);
+        }
+
+        function renderChannels() {
+            const renderList = (container) => {
+                container.innerHTML = CHANNELS.map(ch => {
+                    const active = ch.id === state.currentChannel;
+                    return `
+                        <button onclick="switchChannel('${ch.id}')" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${active ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}">
+                            <i data-lucide="${ch.icon}" class="w-4 h-4"></i>
+                            <span>${ch.name}</span>
+                        </button>
+                    `;
+                }).join('');
+            };
+            renderList(elements.channelList);
+            renderList(elements.mobileChannelList);
+            lucide.createIcons();
+        }
+
+        window.switchChannel = function(channelId) {
+            state.currentChannel = channelId;
+            const chObj = CHANNELS.find(c => c.id === channelId);
+            if (chObj) {
+                elements.currentChannelTitle.textContent = chObj.name;
+                elements.currentChannelIcon.innerHTML = `<i data-lucide="${chObj.icon}" class="w-5 h-5"></i>`;
+            }
+            renderMessages();
+            renderChannels();
+            if (!elements.mobileDrawer.classList.contains('hidden')) {
+                elements.mobileDrawer.classList.add('hidden');
+            }
+        };
+
+        function renderMessages() {
+            const currentMsgs = state.messages[state.currentChannel] || [];
+            let list = currentMsgs;
+
+            if (state.searchQuery) {
+                const q = state.searchQuery.toLowerCase();
+                list = list.filter(m => m.text.toLowerCase().includes(q) || m.userName.toLowerCase().includes(q));
+            }
+
+            if (list.length === 0) {
+                elements.messageContainer.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-slate-500 space-y-2 py-12">
+                        <i data-lucide="message-square-off" class="w-10 h-10 stroke-1"></i>
+                        <p class="text-sm">このチャンネルにはまだメッセージがありません</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            let lastDateStr = '';
+            elements.messageContainer.innerHTML = list.map(msg => {
+                const dateObj = new Date(msg.timestamp);
+                const dateStr = dateObj.toLocaleDateString();
+                let dateDividerHTML = '';
+                if (dateStr !== lastDateStr) {
+                    lastDateStr = dateStr;
+                    dateDividerHTML = `
+                        <div class="flex items-center justify-center my-4">
+                            <div class="border-t border-darkborder flex-grow"></div>
+                            <span class="px-3 text-[11px] font-medium text-slate-400 bg-darkpanel/80 rounded-full border border-darkborder py-0.5">${dateStr}</span>
+                            <div class="border-t border-darkborder flex-grow"></div>
+                        </div>
+                    `;
+                }
+
+                const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isSelf = msg.userId === state.user.id;
+                const avatar = msg.userAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100';
+
+                let displayText = escapeHTML(msg.text);
+                if (state.searchQuery) {
+                    const regex = new RegExp(`(${escapeRegExp(state.searchQuery)})`, 'gi');
+                    displayText = displayText.replace(regex, '<mark class="bg-brand-500/40 text-brand-200 px-1 rounded">$1</mark>');
+                }
+
+                const reactions = msg.reactions || {};
+                const reactionHTML = Object.entries(reactions).map(([emoji, count]) => `
+                    <button onclick="toggleReaction('${msg.id}', '${emoji}')" class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 border border-darkborder text-slate-300 transition-colors">
+                        <span>${emoji}</span>
+                        <span class="font-semibold text-slate-200">${count}</span>
+                    </button>
+                `).join('');
+
+                return `
+                    ${dateDividerHTML}
+                    <div class="flex items-start space-x-3 group hover:bg-slate-900/30 p-2 rounded-xl transition-colors">
+                        <img src="${avatar}" class="w-10 h-10 rounded-full object-cover border border-darkborder shrink-0 bg-slate-800" alt="Avatar">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-baseline space-x-2 mb-1">
+                                <span class="font-bold text-sm text-slate-200">${escapeHTML(msg.userName)}</span>
+                                <span class="text-[11px] text-slate-500">${timeStr}</span>
+                                ${isSelf ? '<span class="text-[10px] bg-brand-500/10 text-brand-400 px-1.5 py-0.2 rounded border border-brand-500/20">自分</span>' : ''}
+                            </div>
+                            <div class="text-sm text-slate-100 leading-relaxed break-words">${displayText}</div>
+                            ${msg.image ? `<div class="mt-2"><img src="${msg.image}" class="max-w-xs max-h-60 rounded-xl border border-darkborder object-cover cursor-pointer hover:opacity-90 transition-opacity" onclick="window.open('${msg.image}')"></div>` : ''}
+                            
+                            <div class="flex items-center space-x-1.5 mt-2 flex-wrap">
+                                ${reactionHTML}
+                                <div class="relative inline-block group/picker">
+                                    <button class="px-2 py-0.5 rounded-lg text-xs bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-darkborder/50 transition-colors" title="リアクション追加">
+                                        + 😊
+                                    </button>
+                                    <div class="hidden group-hover/picker:flex items-center space-x-1 absolute bottom-full mb-1 left-0 bg-darkpanel border border-darkborder rounded-xl p-1 shadow-xl z-20">
+                                        <button onclick="toggleReaction('${msg.id}', '👍')" class="p-1.5 hover:bg-slate-800 rounded">👍</button>
+                                        <button onclick="toggleReaction('${msg.id}', '❤️')" class="p-1.5 hover:bg-slate-800 rounded">❤️</button>
+                                        <button onclick="toggleReaction('${msg.id}', '🔥')" class="p-1.5 hover:bg-slate-800 rounded">🔥</button>
+                                        <button onclick="toggleReaction('${msg.id}', '😂')" class="p-1.5 hover:bg-slate-800 rounded">😂</button>
+                                        <button onclick="toggleReaction('${msg.id}', '🎉')" class="p-1.5 hover:bg-slate-800 rounded">🎉</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            elements.messageContainer.scrollTop = elements.messageContainer.scrollHeight;
+            lucide.createIcons();
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        window.toggleReaction = function(msgId, emoji) {
+            const currentMsgs = state.messages[state.currentChannel] || [];
+            const msg = currentMsgs.find(m => m.id === msgId);
+            if (!msg) return;
+            if (!msg.reactions) msg.reactions = {};
+            msg.reactions[emoji] = (msg.reactions[emoji] || 0) + 1;
+            saveMessagesToStorage(state.currentChannel);
+            renderMessages();
+            sendPayload({
+                type: 'REACTION_UPDATE',
+                channel: state.currentChannel,
+                messageId: msgId,
+                reactions: msg.reactions
+            });
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStorage();
+            renderChannels();
+            renderMessages();
+            initSync();
+
+            const updateUIUserInfo = () => {
+                elements.sidebarUserName.textContent = state.user.name;
+                elements.sidebarUserAvatar.src = state.user.avatar || '';
+                elements.mobileUserName.textContent = state.user.name;
+                elements.mobileUserAvatar.src = state.user.avatar || '';
+                elements.profileAvatarPreview.src = state.user.avatar || '';
+                elements.profileNameInput.value = state.user.name;
+            };
+            updateUIUserInfo();
+
+            elements.chatForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (state.cooldownSeconds > 0) return;
+                const text = elements.messageInput.value.trim();
+                if (!text && !attachedImageBase64) return;
+
+                const messagePayload = {
+                    id: 'msg_' + Math.random().toString(36).substr(2, 9),
+                    channel: state.currentChannel,
+                    userId: state.user.id,
+                    userName: state.user.name,
+                    userAvatar: state.user.avatar,
+                    text: text,
+                    image: attachedImageBase64,
+                    timestamp: Date.now(),
+                    reactions: {}
+                };
+
+                if (!state.isCaptchaVerified && state.user.name.startsWith('ゲスト_')) {
+                    openCaptchaModal(messagePayload);
+                } else {
+                    sendMessageDirectly(messagePayload);
+                }
+            });
+
+            elements.captchaForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const val = elements.captchaInput.value.trim().toUpperCase();
+                if (val === state.captchaCode) {
+                    state.isCaptchaVerified = true;
+                    localStorage.setItem('clastic_captcha_verified', 'true');
+                    updateCaptchaBadgeUI();
+                    closeCaptchaModal();
+
+                    if (state.pendingMessage) {
+                        sendMessageDirectly(state.pendingMessage);
+                        state.pendingMessage = null;
+                    }
+                } else {
+                    elements.captchaError.classList.remove('hidden');
+                    generateCaptchaCode();
+                    elements.captchaInput.value = '';
+                    elements.captchaInput.focus();
+                }
+            });
+
+            elements.btnCloseCaptcha.addEventListener('click', closeCaptchaModal);
+            elements.btnCancelCaptcha.addEventListener('click', closeCaptchaModal);
+            elements.captchaCanvas.addEventListener('click', generateCaptchaCode);
+            elements.btnRefreshCaptcha.addEventListener('click', generateCaptchaCode);
+            elements.btnTriggerCaptcha.addEventListener('click', () => openCaptchaModal(null));
+
+            elements.imageInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        attachedImageBase64 = event.target.result;
+                        elements.imagePreviewThumb.src = attachedImageBase64;
+                        elements.imagePreviewBar.classList.remove('hidden');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            elements.btnRemoveImage.addEventListener('click', () => {
+                attachedImageBase64 = null;
+                elements.imagePreviewBar.classList.add('hidden');
+                elements.imageInput.value = '';
+            });
+
+            const openProfileModalFunc = () => {
+                elements.profileNameInput.value = state.user.name;
+                elements.profileAvatarPreview.src = state.user.avatar;
+                elements.profileModal.classList.remove('hidden');
+                if (!elements.mobileDrawer.classList.contains('hidden')) {
+                    elements.mobileDrawer.classList.add('hidden');
+                }
+            };
+            elements.btnOpenProfile.addEventListener('click', openProfileModalFunc);
+            elements.btnOpenProfileMobile.addEventListener('click', openProfileModalFunc);
+            
+            elements.btnCloseProfile.addEventListener('click', () => {
+                elements.profileModal.classList.add('hidden');
+            });
+
+            elements.profileForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newName = elements.profileNameInput.value.trim();
+                if (newName) {
+                    state.user.name = newName;
+                    state.isCaptchaVerified = true;
+                    localStorage.setItem('clastic_captcha_verified', 'true');
+                    updateCaptchaBadgeUI();
+                }
+                updateUIUserInfo();
+                saveUserToStorage();
+                elements.profileModal.classList.add('hidden');
+                renderMessages();
+            });
+
+            elements.avatarInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        state.user.avatar = event.target.result;
+                        elements.profileAvatarPreview.src = state.user.avatar;
+                        elements.sidebarUserAvatar.src = state.user.avatar;
+                        elements.mobileUserAvatar.src = state.user.avatar;
+                        saveUserToStorage();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            const openUsersModalFunc = () => {
+                cleanupInactiveUsers();
+                elements.onlineUsersList.innerHTML = Array.from(state.activeUsers.values()).map(u => `
+                    <div class="flex items-center space-x-3 p-2.5 bg-slate-900 rounded-xl border border-darkborder">
+                        <img src="${u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}" class="w-10 h-10 rounded-full object-cover border border-darkborder bg-slate-800" alt="Avatar">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-sm text-slate-200 truncate">${escapeHTML(u.name)}</div>
+                            <div class="text-xs text-emerald-400 flex items-center space-x-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span>オンライン</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                elements.usersModal.classList.remove('hidden');
+                if (!elements.mobileDrawer.classList.contains('hidden')) {
+                    elements.mobileDrawer.classList.add('hidden');
+                }
+            };
+            elements.btnViewOnlineUsers.addEventListener('click', openUsersModalFunc);
+            elements.btnViewOnlineUsersMobile.addEventListener('click', openUsersModalFunc);
+
+            elements.btnCloseUsersModal.addEventListener('click', () => {
+                elements.usersModal.classList.add('hidden');
+            });
+
+            elements.searchInput.addEventListener('input', (e) => {
+                state.searchQuery = e.target.value.trim();
+                if (state.searchQuery) {
+                    elements.btnClearSearch.classList.remove('hidden');
+                    elements.searchNotice.classList.remove('hidden');
+                    elements.searchNoticeText.textContent = `「${state.searchQuery}」の検索結果フィルタ適用中`;
+                } else {
+                    elements.btnClearSearch.classList.add('hidden');
+                    elements.searchNotice.classList.add('hidden');
+                }
+                renderMessages();
+            });
+
+            elements.btnClearSearch.addEventListener('click', () => {
+                elements.searchInput.value = '';
+                state.searchQuery = '';
+                elements.btnClearSearch.classList.add('hidden');
+                elements.searchNotice.classList.add('hidden');
+                renderMessages();
+            });
+
+            elements.btnResetSearch.addEventListener('click', () => {
+                elements.searchInput.value = '';
+                state.searchQuery = '';
+                elements.btnClearSearch.classList.add('hidden');
+                elements.searchNotice.classList.add('hidden');
+                renderMessages();
+            });
+
+            elements.btnMobileSidebar.addEventListener('click', () => {
+                elements.mobileDrawer.classList.remove('hidden');
+            });
+            elements.btnCloseMobileDrawer.addEventListener('click', () => {
+                elements.mobileDrawer.classList.add('hidden');
+            });
+
+            lucide.createIcons();
+        });
+
+        function startCooldown(seconds) {
+            state.cooldownSeconds = seconds;
+            elements.cooldownBadge.classList.remove('hidden');
+            elements.messageInput.disabled = true;
+            elements.btnSend.disabled = true;
+            elements.btnSend.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const interval = setInterval(() => {
+                state.cooldownSeconds--;
+                elements.cooldownTimer.textContent = state.cooldownSeconds;
+                if (state.cooldownSeconds <= 0) {
+                    clearInterval(interval);
+                    elements.cooldownBadge.classList.add('hidden');
+                    elements.messageInput.disabled = false;
+                    elements.btnSend.disabled = false;
+                    elements.btnSend.classList.remove('opacity-50', 'cursor-not-allowed');
+                    elements.messageInput.focus();
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
