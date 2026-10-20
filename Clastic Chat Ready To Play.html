@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ja" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>クラスティックチャット (Clastic Chat)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        },
+                        darkBg: '#0f172a',
+                        darkPanel: '#1e293b',
+                        darkInput: '#334155'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 3px; }
+        .dark ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.2); }
+        .chat-bubble-user { border-bottom-right-radius: 2px; }
+        .chat-bubble-other { border-bottom-left-radius: 2px; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-darkBg text-gray-800 dark:text-gray-100 h-full flex flex-col transition-colors duration-200">
+
+    <!-- CAPTCHA Security Modal -->
+    <div id="captcha-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-darkPanel rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-gray-200 dark:border-gray-700">
+            <div class="text-center space-y-2">
+                <div class="inline-flex items-center justify-center w-12 h-12 bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 rounded-full mb-1">
+                    <i class="fa-solid fa-shield-halved text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold">セキュリティ認証</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">スパム・ボット防止のため、画像の英数字を入力してください。</p>
+            </div>
+
+            <div class="flex flex-col items-center gap-3 py-2">
+                <div class="relative flex items-center justify-center bg-gray-900 rounded-xl p-2 shadow-inner">
+                    <canvas id="captcha-canvas" width="200" height="60" class="rounded cursor-pointer" onclick="generateCaptcha()" title="クリックで再生成"></canvas>
+                    <button type="button" onclick="generateCaptcha()" class="absolute right-2 text-white/70 hover:text-white p-1 text-sm" title="更新">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+
+                <input type="text" id="captcha-input" placeholder="表示された文字を入力" class="w-full text-center tracking-widest text-lg font-mono font-bold px-4 py-2 bg-gray-50 dark:bg-darkInput border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none uppercase">
+                <p id="captcha-error" class="text-xs text-red-500 hidden font-semibold"><i class="fa-solid fa-triangle-exclamation"></i> 認証コードが一致しません。</p>
+            </div>
+
+            <button onclick="verifyCaptcha()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-600/30 transition duration-150 active:scale-[0.98]">
+                認証してチャットに入る
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App Frame -->
+    <div class="flex-1 flex h-full overflow-hidden">
+        
+        <!-- Sidebar Navigation -->
+        <aside id="sidebar" class="w-72 bg-white dark:bg-darkPanel border-r border-gray-200 dark:border-gray-800 flex flex-col z-20 absolute md:relative h-full transition-transform duration-300 transform -translate-x-full md:translate-x-0">
+            
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-gradient-to-tr from-brand-600 to-emerald-400 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md">
+                        C
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-base leading-tight">クラスティック</h1>
+                        <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> READY
+                        </span>
+                    </div>
+                </div>
+                <button onclick="toggleTheme()" class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-darkInput text-gray-600 dark:text-gray-300 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                    <i class="fa-solid fa-moon dark:hidden"></i>
+                    <i class="fa-solid fa-sun hidden dark:inline"></i>
+                </button>
+            </div>
+
+            <!-- Channels -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-4">
+                <div>
+                    <span class="px-2 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">チャンネル</span>
+                    <div class="mt-1 space-y-1" id="channels-container"></div>
+                </div>
+
+                <div>
+                    <span class="px-2 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">アクティブメンバー</span>
+                    <div class="mt-2 space-y-2 px-2" id="users-list">
+                        <div class="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span id="sidebar-my-name">名無しユーザー</span> (自分)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Settings -->
+            <div class="p-3 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                <div class="flex items-center gap-2 cursor-pointer hover:opacity-80 transition" onclick="openProfileModal()">
+                    <div id="user-avatar-display" class="w-9 h-9 rounded-full bg-brand-500 text-white flex items-center justify-center text-lg font-bold shadow-sm overflow-hidden">
+                        <span>🐱</span>
+                    </div>
+                    <div class="overflow-hidden">
+                        <p id="user-name-display" class="text-sm font-bold truncate">ゲストユーザー</p>
+                        <p class="text-[10px] text-gray-400">プロフィールを編集</p>
+                    </div>
+                </div>
+                <button onclick="openProfileModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 flex flex-col h-full bg-gray-50 dark:bg-darkBg relative overflow-hidden">
+            
+            <!-- Header Bar with Search & History Controls -->
+            <header class="h-16 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-darkPanel px-4 flex items-center justify-between shrink-0 shadow-sm z-10">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleSidebar()" class="md:hidden text-gray-600 dark:text-gray-300 p-2 text-lg">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <span id="current-channel-icon" class="text-lg text-brand-600 dark:text-brand-400 font-bold">#</span>
+                        <h2 id="current-channel-name" class="font-bold text-lg">★ メインチャット</h2>
+                        <span id="pinned-badge" class="ml-2 text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <i class="fa-solid fa-thumbtack"></i> 固定
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Chat History Search Toggle -->
+                <div class="flex items-center gap-2">
+                    <div class="relative flex items-center">
+                        <input type="text" id="history-search-input" oninput="handleHistorySearch(this.value)" placeholder="チャット履歴を検索..." class="w-36 sm:w-56 text-xs pl-8 pr-3 py-1.5 bg-gray-100 dark:bg-darkInput border border-gray-200 dark:border-gray-700 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 dark:text-gray-100">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 text-xs text-gray-400"></i>
+                    </div>
+                    <button onclick="scrollToBottom()" class="text-xs bg-gray-100 dark:bg-darkInput hover:bg-gray-200 text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-full font-semibold transition" title="最新ログへ移動">
+                        <i class="fa-solid fa-arrow-down"></i> <span class="hidden sm:inline">最新へ</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Active Search Filter Banner -->
+            <div id="search-banner" class="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 text-xs text-amber-600 dark:text-amber-400 flex items-center justify-between hidden">
+                <span><i class="fa-solid fa-filter"></i> 履歴検索フィルターを適用中: "<strong id="search-keyword"></strong>" (<span id="search-count">0</span>件ヒット)</span>
+                <button onclick="clearHistorySearch()" class="font-bold underline hover:text-amber-700">解除</button>
+            </div>
+
+            <!-- Messages Stream -->
+            <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Dynamic Message Stream -->
+            </div>
+
+            <!-- Typing Indicator -->
+            <div id="typing-indicator" class="px-6 py-1 text-xs text-gray-400 dark:text-gray-500 italic h-5 hidden flex items-center gap-1">
+                <i class="fa-solid fa-pen-nib animate-bounce"></i> 誰かが入力中...
+            </div>
+
+            <!-- Message Input Area -->
+            <div class="p-3 sm:p-4 bg-white dark:bg-darkPanel border-t border-gray-200 dark:border-gray-800">
+                
+                <div id="image-preview-bar" class="hidden mb-2 p-2 bg-gray-100 dark:bg-darkInput rounded-xl flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <img id="preview-img-src" src="" class="w-12 h-12 object-cover rounded-lg">
+                        <span class="text-xs text-gray-500">画像添付済み</span>
+                    </div>
+                    <button onclick="clearAttachment()" class="text-gray-400 hover:text-red-500 p-1">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form id="chat-form" onsubmit="handleSendMessage(event)" class="flex items-end gap-2">
+                    
+                    <div class="relative flex-1 bg-gray-100 dark:bg-darkInput rounded-2xl flex items-center px-3 py-1 border border-transparent focus-within:border-brand-500 transition">
+                        
+                        <button type="button" onclick="triggerImageUpload()" class="text-gray-400 hover:text-brand-500 p-2 transition" title="画像を添付">
+                            <i class="fa-solid fa-image text-lg"></i>
+                        </button>
+                        <input type="file" id="image-input" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
+
+                        <textarea id="message-input" rows="1" placeholder="メッセージを入力..." oninput="autoResizeTextarea(this); notifyTyping();" onkeydown="handleKeyDown(event)" class="w-full bg-transparent border-none outline-none text-sm px-2 py-2 resize-none max-h-32 text-gray-800 dark:text-gray-100 placeholder-gray-400"></textarea>
+
+                        <button type="button" onclick="toggleEmojiPicker()" class="text-gray-400 hover:text-amber-500 p-2 transition" title="絵文字を選択">
+                            <i class="fa-solid fa-face-smile text-lg"></i>
+                        </button>
+
+                        <!-- Emoji Picker -->
+                        <div id="emoji-picker" class="absolute right-0 bottom-14 bg-white dark:bg-darkPanel border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl p-3 hidden grid grid-cols-6 gap-2 text-xl z-30">
+                            <button type="button" onclick="insertEmoji('😊')" class="hover:scale-125 transition">😊</button>
+                            <button type="button" onclick="insertEmoji('👍')" class="hover:scale-125 transition">👍</button>
+                            <button type="button" onclick="insertEmoji('🔥')" class="hover:scale-125 transition">🔥</button>
+                            <button type="button" onclick="insertEmoji('🎉')" class="hover:scale-125 transition">🎉</button>
+                            <button type="button" onclick="insertEmoji('❤️')" class="hover:scale-125 transition">❤️</button>
+                            <button type="button" onclick="insertEmoji('😂')" class="hover:scale-125 transition">😂</button>
+                            <button type="button" onclick="insertEmoji('✨')" class="hover:scale-125 transition">✨</button>
+                            <button type="button" onclick="insertEmoji('🙌')" class="hover:scale-125 transition">🙌</button>
+                            <button type="button" onclick="insertEmoji('👀')" class="hover:scale-125 transition">👀</button>
+                            <button type="button" onclick="insertEmoji('💯')" class="hover:scale-125 transition">💯</button>
+                            <button type="button" onclick="insertEmoji('🚀')" class="hover:scale-125 transition">🚀</button>
+                            <button type="button" onclick="insertEmoji('🐱')" class="hover:scale-125 transition">🐱</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="send-btn" class="w-11 h-11 bg-brand-600 hover:bg-brand-700 text-white rounded-full flex items-center justify-center shadow-lg shadow-brand-600/30 transition duration-150 shrink-0 active:scale-95">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div id="profile-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-darkPanel rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-gray-200 dark:border-gray-700">
+            <div class="flex justify-between items-center border-b border-gray-200 dark:border-gray-800 pb-3">
+                <h3 class="font-bold text-lg">プロフィール設定</h3>
+                <button onclick="closeProfileModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-2">アイコン設定</label>
+                    
+                    <!-- Avatar Preview & Local Image Upload -->
+                    <div class="flex items-center gap-4 mb-3">
+                        <div id="modal-avatar-preview" class="w-14 h-14 rounded-full bg-brand-500 text-white flex items-center justify-center text-2xl font-bold shadow overflow-hidden shrink-0">
+                            🐱
+                        </div>
+                        <div class="flex-1 space-y-1">
+                            <button type="button" onclick="triggerAvatarUpload()" class="w-full py-1.5 px-3 bg-gray-100 dark:bg-darkInput hover:bg-gray-200 text-xs font-bold rounded-lg border border-gray-300 dark:border-gray-600 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-camera"></i> 📷 画像をアップロード
+                            </button>
+                            <input type="file" id="avatar-file-input" accept="image/*" class="hidden" onchange="handleAvatarFileSelect(event)">
+                            <p class="text-[10px] text-gray-400">端末内の写真・画像ファイルを使用可能</p>
+                        </div>
+                    </div>
+
+                    <label class="block text-xs font-bold text-gray-400 mb-1">または絵文字を選択</label>
+                    <div class="flex gap-2 flex-wrap" id="avatar-selector"></div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">表示名</label>
+                    <input type="text" id="profile-name-input" maxlength="15" class="w-full px-3 py-2 bg-gray-100 dark:bg-darkInput border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeProfileModal()" class="px-4 py-2 text-sm text-gray-500">キャンセル</button>
+                <button onclick="saveProfile()" class="px-5 py-2 bg-brand-600 text-white font-bold rounded-xl shadow">保存する</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONSTANTS
+        const CHANNELS = [
+            { id: 'main', name: '★ メインチャット', pinned: true, icon: 'fa-star' },
+            { id: 'zatsudan', name: '雑談', pinned: false, icon: 'fa-hashtag' },
+            { id: 'game', name: 'ゲーム', pinned: false, icon: 'fa-gamepad' },
+            { id: 'news', name: 'ニュース', pinned: false, icon: 'fa-newspaper' }
+        ];
+
+        const AVATARS = ['🐱', '🐶', '🦊', '🐼', '🤖', '👾', '🚀', '👑'];
+
+        // STATE
+        let currentChannel = 'main';
+        let currentUser = {
+            id: 'usr_' + Math.random().toString(36).substr(2, 6),
+            name: '名無しユーザー',
+            avatar: '🐱',
+            isCustomImage: false
+        };
+        let captchaCode = '';
+        let captchaVerified = false;
+        let selectedImageData = null;
+        let tempAvatarData = null;
+        let tempAvatarIsCustom = false;
+        let searchFilterKeyword = '';
+        let lastPostTime = 0;
+
+        // INITIAL SEED HISTORY DATA
+        let localMessagesStore = JSON.parse(localStorage.getItem('clastic_play_history')) || {
+            main: [
+                { id: 'msg-1', userId: 'sys', userName: 'クラスティック運営', userAvatar: '👑', isCustomImage: false, text: '「クラスティックチャット」へようこそ！このHTMLファイルを保存すればそのまますぐに遊べます。', timestamp: Date.now() - 86400000 * 2, reactions: { '👍': 5, '🎉': 2 } },
+                { id: 'msg-2', userId: 'usr_101', userName: '案内ボット', userAvatar: '🤖', isCustomImage: false, text: '左下の⚙️マークから自分の名前や好きな画像アイコンを設定できますよ！', timestamp: Date.now() - 86400000, reactions: { '✨': 3 } }
+            ],
+            zatsudan: [],
+            game: [],
+            news: []
+        };
+
+        // SETUP
+        window.addEventListener('DOMContentLoaded', () => {
+            generateCaptcha();
+            renderChannels();
+            renderAvatarSelector();
+            loadUserData();
+            renderMessages();
+        });
+
+        // CAPTCHA
+        function generateCaptcha() {
+            const canvas = document.getElementById('captcha-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            captchaCode = '';
+            for (let i = 0; i < 5; i++) {
+                captchaCode += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+
+            for (let i = 0; i < 6; i++) {
+                ctx.strokeStyle = `rgba(${Math.random()*255}, ${Math.random()*255}, 255, 0.4)`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+                ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
+                ctx.stroke();
+            }
+
+            ctx.font = 'bold 30px monospace';
+            for (let i = 0; i < captchaCode.length; i++) {
+                ctx.fillStyle = `hsl(${Math.random() * 360}, 80%, 70%)`;
+                ctx.save();
+                ctx.translate(30 + i * 32, 40);
+                ctx.rotate((Math.random() - 0.5) * 0.4);
+                ctx.fillText(captchaCode[i], 0, 0);
+                ctx.restore();
+            }
+        }
+
+        function verifyCaptcha() {
+            const input = document.getElementById('captcha-input').value.toUpperCase().trim();
+            if (input === captchaCode) {
+                captchaVerified = true;
+                document.getElementById('captcha-modal').classList.add('hidden');
+            } else {
+                document.getElementById('captcha-error').classList.remove('hidden');
+                generateCaptcha();
+                document.getElementById('captcha-input').value = '';
+            }
+        }
+
+        // PROFILE & AVATAR
+        function loadUserData() {
+            const saved = localStorage.getItem('clastic_user_play');
+            if (saved) {
+                currentUser = JSON.parse(saved);
+            } else {
+                currentUser.name = 'プレイヤー' + Math.floor(Math.random() * 899 + 100);
+            }
+            updateProfileUI();
+        }
+
+        function updateProfileUI() {
+            document.getElementById('user-name-display').innerText = currentUser.name;
+            document.getElementById('sidebar-my-name').innerText = currentUser.name;
+            document.getElementById('profile-name-input').value = currentUser.name;
+
+            const avatarContainer = document.getElementById('user-avatar-display');
+            if (currentUser.isCustomImage) {
+                avatarContainer.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
+            } else {
+                avatarContainer.innerHTML = `<span>${currentUser.avatar}</span>`;
+            }
+        }
+
+        function openProfileModal() {
+            tempAvatarData = currentUser.avatar;
+            tempAvatarIsCustom = currentUser.isCustomImage;
+            updateModalAvatarPreview();
+            document.getElementById('profile-modal').classList.remove('hidden');
+        }
+
+        function closeProfileModal() {
+            document.getElementById('profile-modal').classList.add('hidden');
+        }
+
+        function triggerAvatarUpload() {
+            document.getElementById('avatar-file-input').click();
+        }
+
+        function handleAvatarFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                tempAvatarData = event.target.result;
+                tempAvatarIsCustom = true;
+                updateModalAvatarPreview();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function selectAvatar(emoji) {
+            tempAvatarData = emoji;
+            tempAvatarIsCustom = false;
+            updateModalAvatarPreview();
+        }
+
+        function updateModalAvatarPreview() {
+            const previewEl = document.getElementById('modal-avatar-preview');
+            if (tempAvatarIsCustom) {
+                previewEl.innerHTML = `<img src="${tempAvatarData}" class="w-full h-full object-cover">`;
+            } else {
+                previewEl.innerHTML = `<span>${tempAvatarData}</span>`;
+            }
+        }
+
+        function renderAvatarSelector() {
+            const container = document.getElementById('avatar-selector');
+            container.innerHTML = AVATARS.map(emoji => `
+                <button type="button" onclick="selectAvatar('${emoji}')" class="w-9 h-9 rounded-xl bg-gray-100 dark:bg-darkInput text-lg flex items-center justify-center hover:scale-110 transition border border-transparent focus:border-brand-500">
+                    ${emoji}
+                </button>
+            `).join('');
+        }
+
+        function saveProfile() {
+            const newName = document.getElementById('profile-name-input').value.trim();
+            if (newName) currentUser.name = newName;
+
+            currentUser.avatar = tempAvatarData;
+            currentUser.isCustomImage = tempAvatarIsCustom;
+
+            localStorage.setItem('clastic_user_play', JSON.stringify(currentUser));
+            updateProfileUI();
+            closeProfileModal();
+        }
+
+        // CHANNELS
+        function renderChannels() {
+            const container = document.getElementById('channels-container');
+            container.innerHTML = CHANNELS.map(ch => {
+                const isActive = ch.id === currentChannel;
+                return `
+                    <button onclick="switchChannel('${ch.id}')" class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition ${isActive ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-darkInput'}">
+                        <div class="flex items-center gap-2.5 truncate">
+                            <i class="fa-solid ${ch.icon} text-xs ${isActive ? 'text-white' : 'text-gray-400'}"></i>
+                            <span class="truncate">${ch.name}</span>
+                        </div>
+                        ${ch.pinned ? `<i class="fa-solid fa-thumbtack text-[10px] ${isActive ? 'text-white' : 'text-amber-500'}"></i>` : ''}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function switchChannel(channelId) {
+            currentChannel = channelId;
+            renderChannels();
+            
+            const channel = CHANNELS.find(c => c.id === channelId);
+            document.getElementById('current-channel-name').innerText = channel.name;
+            document.getElementById('pinned-badge').style.display = channel.pinned ? 'inline-flex' : 'none';
+            document.getElementById('message-input').placeholder = `${channel.name} にメッセージを送信...`;
+
+            renderMessages();
+            document.getElementById('sidebar').classList.add('-translate-x-full');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        }
+
+        // HISTORY SEARCH
+        function handleHistorySearch(keyword) {
+            searchFilterKeyword = keyword.trim().toLowerCase();
+            const banner = document.getElementById('search-banner');
+
+            if (searchFilterKeyword) {
+                banner.classList.remove('hidden');
+                document.getElementById('search-keyword').innerText = searchFilterKeyword;
+            } else {
+                banner.classList.add('hidden');
+            }
+            renderMessages();
+        }
+
+        function clearHistorySearch() {
+            document.getElementById('history-search-input').value = '';
+            handleHistorySearch('');
+        }
+
+        // MESSAGE RENDERING
+        function renderMessages() {
+            const container = document.getElementById('messages-container');
+            let messages = localMessagesStore[currentChannel] || [];
+
+            messages.sort((a, b) => a.timestamp - b.timestamp);
+
+            if (searchFilterKeyword) {
+                messages = messages.filter(m => 
+                    m.text.toLowerCase().includes(searchFilterKeyword) || 
+                    m.userName.toLowerCase().includes(searchFilterKeyword)
+                );
+                document.getElementById('search-count').innerText = messages.length;
+            }
+
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center text-gray-400 p-6 space-y-2">
+                        <div class="w-16 h-16 bg-gray-200 dark:bg-darkInput rounded-full flex items-center justify-center text-2xl mb-2">
+                            📜
+                        </div>
+                        <p class="font-bold text-gray-600 dark:text-gray-300">表示できるログ履歴がありません</p>
+                        <p class="text-xs">メッセージを投稿して履歴を残しましょう。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let htmlOutput = '';
+            let lastDateStr = '';
+
+            messages.forEach((msg) => {
+                const msgDate = new Date(msg.timestamp);
+                const dateStr = msgDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+                const timeStr = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                if (dateStr !== lastDateStr) {
+                    htmlOutput += `
+                        <div class="flex items-center my-4">
+                            <div class="flex-1 border-t border-gray-200 dark:border-gray-800"></div>
+                            <span class="px-3 text-[11px] font-bold text-gray-400 bg-gray-100 dark:bg-darkInput py-0.5 rounded-full shadow-sm">
+                                ${dateStr}
+                            </span>
+                            <div class="flex-1 border-t border-gray-200 dark:border-gray-800"></div>
+                        </div>
+                    `;
+                    lastDateStr = dateStr;
+                }
+
+                const isMe = msg.userId === currentUser.id;
+                const avatarContent = msg.isCustomImage 
+                    ? `<img src="${msg.userAvatar}" class="w-full h-full object-cover">` 
+                    : `<span>${msg.userAvatar || '🐱'}</span>`;
+
+                htmlOutput += `
+                    <div class="flex gap-3 ${isMe ? 'flex-row-reverse' : ''} group">
+                        <div class="w-9 h-9 rounded-full bg-gray-200 dark:bg-darkInput flex items-center justify-center text-lg shrink-0 shadow-sm overflow-hidden">
+                            ${avatarContent}
+                        </div>
+                        <div class="max-w-[75%] space-y-1">
+                            <div class="flex items-center gap-2 ${isMe ? 'flex-row-reverse' : ''} text-xs text-gray-400">
+                                <span class="font-bold text-gray-700 dark:text-gray-300">${escapeHTML(msg.userName)}</span>
+                                <span>${timeStr}</span>
+                            </div>
+                            <div class="p-3 rounded-2xl text-sm ${isMe ? 'bg-brand-600 text-white chat-bubble-user shadow-md shadow-brand-600/10' : 'bg-white dark:bg-darkPanel text-gray-800 dark:text-gray-100 chat-bubble-other border border-gray-200/80 dark:border-gray-800 shadow-sm'}">
+                                ${msg.image ? `<img src="${msg.image}" class="rounded-xl max-h-48 mb-2 object-cover">` : ''}
+                                <p class="whitespace-pre-wrap leading-relaxed">${highlightKeyword(escapeHTML(msg.text), searchFilterKeyword)}</p>
+                            </div>
+                            
+                            <!-- Reactions Bar -->
+                            <div class="flex items-center gap-1 ${isMe ? 'justify-end' : ''} pt-0.5">
+                                ${renderReactions(msg)}
+                                <div class="opacity-0 group-hover:opacity-100 transition flex items-center gap-1 bg-white dark:bg-darkPanel border border-gray-200 dark:border-gray-700 rounded-full px-1.5 py-0.5 text-xs shadow-sm">
+                                    <button onclick="addReaction('${msg.id}', '👍')" class="hover:scale-125 transition">👍</button>
+                                    <button onclick="addReaction('${msg.id}', '❤️')" class="hover:scale-125 transition">❤️</button>
+                                    <button onclick="addReaction('${msg.id}', '🔥')" class="hover:scale-125 transition">🔥</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = htmlOutput;
+            if (!searchFilterKeyword) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function highlightKeyword(text, keyword) {
+            if (!keyword) return text;
+            const re = new RegExp(`(${keyword})`, 'gi');
+            return text.replace(re, `<mark class="bg-amber-300 dark:bg-amber-600 text-gray-900 rounded px-0.5">$1</mark>`);
+        }
+
+        function renderReactions(msg) {
+            if (!msg.reactions) return '';
+            return Object.entries(msg.reactions).map(([emoji, count]) => `
+                <button onclick="addReaction('${msg.id}', '${emoji}')" class="bg-gray-200/60 dark:bg-darkInput px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 hover:bg-gray-300 dark:hover:bg-gray-700 transition">
+                    <span>${emoji}</span>
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400">${count}</span>
+                </button>
+            `).join('');
+        }
+
+        function addReaction(msgId, emoji) {
+            const list = localMessagesStore[currentChannel] || [];
+            const msg = list.find(m => m.id === msgId);
+            if (!msg) return;
+
+            if (!msg.reactions) msg.reactions = {};
+            msg.reactions[emoji] = (msg.reactions[emoji] || 0) + 1;
+
+            saveMessages();
+        }
+
+        // SENDING MESSAGES
+        function handleSendMessage(e) {
+            e.preventDefault();
+            if (!captchaVerified) return;
+
+            const now = Date.now();
+            if (now - lastPostTime < 1500) {
+                alert("連投防止のため、少し待ってから投稿してください。");
+                return;
+            }
+
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+
+            if (!text && !selectedImageData) return;
+
+            const newMessage = {
+                id: 'msg-' + Date.now(),
+                userId: currentUser.id,
+                userName: currentUser.name,
+                userAvatar: currentUser.avatar,
+                isCustomImage: currentUser.isCustomImage,
+                text: text,
+                image: selectedImageData,
+                timestamp: Date.now(),
+                reactions: {}
+            };
+
+            if (!localMessagesStore[currentChannel]) {
+                localMessagesStore[currentChannel] = [];
+            }
+
+            localMessagesStore[currentChannel].push(newMessage);
+            lastPostTime = now;
+
+            input.value = '';
+            input.style.height = 'auto';
+            clearAttachment();
+            document.getElementById('emoji-picker').classList.add('hidden');
+
+            saveMessages();
+            scrollToBottom();
+        }
+
+        function saveMessages() {
+            localStorage.setItem('clastic_play_history', JSON.stringify(localMessagesStore));
+            renderMessages();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messages-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ATTACHMENTS & EMOJIS
+        function triggerImageUpload() {
+            document.getElementById('image-input').click();
+        }
+
+        function handleImageSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                selectedImageData = event.target.result;
+                document.getElementById('preview-img-src').src = selectedImageData;
+                document.getElementById('image-preview-bar').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearAttachment() {
+            selectedImageData = null;
+            document.getElementById('image-preview-bar').classList.add('hidden');
+            document.getElementById('image-input').value = '';
+        }
+
+        function toggleEmojiPicker() {
+            document.getElementById('emoji-picker').classList.toggle('hidden');
+        }
+
+        function insertEmoji(emoji) {
+            const input = document.getElementById('message-input');
+            input.value += emoji;
+            document.getElementById('emoji-picker').classList.add('hidden');
+            input.focus();
+        }
+
+        // HELPERS
+        function handleKeyDown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage(e);
+            }
+        }
+
+        function autoResizeTextarea(el) {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        }
+
+        function notifyTyping() {
+            const typingEl = document.getElementById('typing-indicator');
+            typingEl.classList.remove('hidden');
+            clearTimeout(window.typingTimer);
+            window.typingTimer = setTimeout(() => {
+                typingEl.classList.add('hidden');
+            }, 2000);
+        }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
